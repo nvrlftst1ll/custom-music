@@ -1,0 +1,11 @@
+{
+  "item.custommusic.music_disc": "Music Disc",
+  "item.custommusic.blank_disc": "Blank Music Disc",
+  "pack.custommusic.data": "Custom Music (data)",
+  "pack.custommusic.sounds": "Custom Music (sounds)",
+  "message.custommusic.no_tracks": "No tracks found. Put .ogg/.mp3/.wav files into config/custommusic/music/ and run /customdisc reload.",
+  "message.custommusic.baked": "Track \"%s\" is now on the disc.",
+  "screen.custommusic.choose_track": "Choose a track",
+  "screen.custommusic.record": "Record onto the disc",
+  "screen.custommusic.empty": "No synced tracks yet…"
+}

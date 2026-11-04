@@ -1,0 +1,29 @@
+# gradle
+.gradle/
+build/
+out/
+classes/
+run/
+runs/
+
+# ide
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+bin/
+
+# fabric/forge/neoforge dev
+remappedSrc/
+logs/
+options.txt
+saves/
+config/custommusic/converted/
+config/custommusic/client-cache/
+
+# misc
+*.DS_Store

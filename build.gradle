@@ -1,0 +1,76 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'net.neoforged.gradle.userdev' version '7.0.171'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "net.neoforged:neoforge:${neo_version}"
+
+    // Audio codecs (LGPL). They are loaded through the JavaSound SPI and are all OPTIONAL
+    // at runtime: if they are missing, mono .ogg tracks still work, everything else
+    // degrades gracefully (or falls back to an external ffmpeg binary). See README.
+    [
+        'com.googlecode.soundlibs:jlayer:1.0.1.4',
+        'com.googlecode.soundlibs:jorbis:0.0.17.4',
+        'com.googlecode.soundlibs:tritonus-share:0.3.7.4',
+        'com.googlecode.soundlibs:vorbisspi:1.0.3.3',
+        'com.googlecode.soundlibs:mp3spi:1.9.5.4',
+    ].each { coord ->
+        def (group, name, ver) = coord.split(':').toList()
+        jarJar(group: group, name: name, version: "[${ver},)") {
+            jarJar.pin(it, ver)
+        }
+        implementation "$group:$name:$ver"
+    }
+}
+
+// Make `./gradlew build` also produce the jar-in-jar artifact.
+tasks.named('build') {
+    dependsOn 'jarJar'
+}
+
+processResources {
+    def replaceProperties = [
+        minecraft_version   : minecraft_version,
+        neo_version         : neo_version,
+        mod_id              : mod_id,
+        mod_version         : mod_version,
+        mod_license         : mod_license,
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+runs {
+    configureEach {
+        systemProperty 'forge.logging.markers', 'REGISTRIES'
+        systemProperty 'forge.logging.console.level', 'info'
+        modSource project.sourceSets.main
+    }
+
+    client {
+        client()
+    }
+
+    server {
+        server()
+        programArgument '--nogui'
+    }
+}

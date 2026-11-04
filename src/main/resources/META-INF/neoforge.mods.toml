@@ -1,0 +1,31 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "${mod_license}"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${mod_version}"
+displayName = "Custom Music"
+authors = "Custom Music contributors"
+description = '''
+Play your own music in Minecraft: drop .ogg/.mp3/.wav files into
+config/custommusic/music/, get data-driven jukebox disc items and listen to them
+in vanilla jukeboxes, positionally and server-authoritatively.
+'''
+
+[[mixins]]
+config = "custommusic.mixins.json"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "[${neo_version},)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "[${minecraft_version},1.22)"
+ordering = "NONE"
+side = "BOTH"

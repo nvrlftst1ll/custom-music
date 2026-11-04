@@ -1,0 +1,249 @@
+# Custom Music
+
+**Слушай свою музыку в Minecraft** — положи аудиофайлы в папку, получи ванильные
+пластинки с треками и играй их в проигрывателе (jukebox) для всех игроков вокруг.
+
+| | |
+|---|---|
+| Minecraft | 1.21.1 |
+| NeoForge | 21.1.x (собрано против 21.1.77) |
+| Java | 21 |
+| Mod ID | `custommusic` |
+| Лицензия | MIT (аудиокодеки — LGPL, опциональны) |
+
+Мод работает **в одиночной игре** и на **выделенном сервере** (мод нужен на обеих
+сторонах: сервер сканирует/раздаёт, клиент играет).
+
+---
+
+## Как пользоваться
+
+1. Установи мод (jar в `mods/`).
+2. Положи свои треки в **`.minecraft/config/custommusic/music/`**
+   (на выделенном сервере — в `config/custommusic/music/` **на сервере**).
+   Поддерживаются `.ogg`, `.mp3`, `.wav`.
+3. Зайди в мир и выполни `/customdisc reload`.
+4. `/customdisc list` — посмотри список и `track_id` треков.
+5. `/customdisc give <track_id> [player]` — получи пластинку.
+6. Вставь пластинку в ванильный проигрыватель. Готово — трек играет
+   **позиционно** (3D-затухание, как у ванильных пластинок), **синхронно для всех**
+   игроков в радиусе слышимости и **сервер-авторитетно** (`SoundSource.RECORDS`).
+
+### Геймплейный способ получения пластинок
+
+Скрафти **чистую пластинку** (8 железных слитков + 1 редстоун, кольцо), щёлкни ею
+ПКМ — откроется экран выбора трека. Выбери трек (двойной клик или «Записать») —
+пластинка станет готовой к проигрыванию.
+
+### Команды
+
+| Команда | Права | Описание |
+|---|---|---|
+| `/customdisc list` | все | список треков: id, название, длительность |
+| `/customdisc give <track_id> [player]` | OP 2 | выдать пластинку с треком |
+| `/customdisc reload` | OP 2 | пересканировать папку и перезагрузить датапаки |
+
+### Имена файлов → track_id
+
+Имя файла превращается в безопасный идентификатор только из `[a-z0-9_.-]`
+(маленькие буквы, цифры, `_ . -`). Кириллица транслитерируется, пробелы и скобки
+становятся `_`, повторы `_` схлопываются:
+
+| Файл | `track_id` |
+|---|---|
+| `Night Owl (Remix).ogg` | `night_owl_remix` |
+| `Мой Крутой Трек.mp3` | `moy_krutoy_trek` |
+| `Track-01 final (stereo).wav` | `track-01_final_stereo` |
+
+Если два файла дают одинаковый id, второй получит суффикс `-2`.
+
+---
+
+## Как это работает (архитектура)
+
+Ключевая проблема: `SoundEvent` нельзя зарегистрировать в рантайме (реестр
+заморожен после старта), а нужно как-то связать произвольные файлы с
+data-driven пластинками 1.21. Решение — **пул слотов + виртуальные паки**:
+
+```
+config/custommusic/music/*.ogg|mp3|wav
+        │  сканер (TrackStore, сервер)
+        ▼
+конвертация в mono 44.1 kHz Ogg Vorbis  ──► config/custommusic/converted/<slug>.ogg
+        │                                        (+ manifest.json, SHA-256)
+        ├─► ВИРТУАЛЬНЫЙ ДАТАПАК (in-memory, AddPackFindersEvent, SERVER_DATA)
+        │     data/custommusic/jukebox_song/<slug>.json
+        │       { "sound_event": "custommusic:slot_<n>",
+        │         "description": {"text": "<название>"},
+        │         "length_in_seconds": <длина>, "comparator_output": 15 }
+        │     data/minecraft/tags/item/music_discs.json → custommusic:music_disc
+        │     ⇒ записи реестра jukebox_song грузятся штатным RegistryDataLoader
+        │       и автоматически синхронизируются ванилью на клиенты
+        ▼
+   jukebox_song «slot_<n>»  ──►  ванильный JukeboxBlockEntity
+        │  level.playSound(..., SoundSource.RECORDS, ...)
+        ▼
+   ClientboundSoundPacket("custommusic:slot_<n>")  ──► клиент
+        │
+        ├─► трек-лист + аудио передаются клиенту кастомными пакетами
+        │   (чанки ~28 КБ, SHA-256, лимит chunksPerTick) в
+        │   config/custommusic/client-cache/
+        ▼
+   ВИРТУАЛЬНЫЙ РЕСУРСПАК (in-memory, CLIENT_RESOURCES)
+         assets/custommusic/sounds.json:
+           "custommusic:slot_<n>": {"sounds": [{"name": "custommusic:tracks/<slug>",
+                                                "stream": true}]}
+         assets/custommusic/sounds/tracks/<slug>.ogg  ← из кеша
+        ▼
+   штатный SoundManager/SoundEngine → позиционное воспроизведение
+```
+
+Почему так:
+
+- **Пул из 128 `SoundEvent`** (`custommusic:slot_0…slot_127`, `createVariableRangeEvent`)
+  регистрируется через `DeferredRegister` до старта игры; каждый трек детерминированно
+  (стабильный хеш slug + линейное пробирование) получает свой слот. Идентичность
+  трека передаётся через id звука — поэтому **не нужны** ни подмена аудиопотока на
+  лету, ни миксины в звуковой движок.
+- **Виртуальный датапак** (`AddPackFindersEvent`, `PackType.SERVER_DATA`) генерирует
+  `jukebox_song/*.json` и тег `music_discs` — записи реестра создаются **штатным**
+  `RegistryDataLoader` (миксин в него не понадобился) и штатно же синхронизируются
+  ванилью на клиенты (это синхронизируемый датапак-реестр в 1.20.5+).
+- **Виртуальный ресурспак** на клиенте генерирует `sounds.json` и отдаёт аудио из
+  кеша — весь проигрыванием занимается ванильный звуковой движок (стриминг,
+  громкость Records, 3D-затухание).
+- Предмет — один `custommusic:music_disc`, конкретный трек хранится в компоненте
+  `minecraft:jukebox_playable` (как у ванильных пластинок): тултип с названием,
+  таймер песни, авто-выброс, компаратор — всё работает ванильно.
+- Единственный миксин — диагностический (`SoundEngineMixin`, клиент): печатает
+  внятное предупреждение, если слот ещё не скачан клиентом.
+
+### Форматы, конвертация и этапы
+
+Ванильный звуковой движок играет только **Ogg Vorbis**, а 3D-затухание работает
+только для **моно** (стерео в OpenAL не позиционируется). Поэтому всё конвертируется
+в **mono 44.1 kHz Ogg Vorbis** на сервере:
+
+| Вход | Что происходит |
+|---|---|
+| `.ogg` mono 44.1 kHz | passthrough — файл копируется без перекодирования |
+| `.ogg` стерео/другой частоты | декод (vorbisspi) → downmix в моно → ресемплинг → Ogg |
+| `.mp3` | декод (mp3spi) → downmix → ресемплинг → Ogg |
+| `.wav` | декод (JavaSound) → downmix → ресемплинг → Ogg |
+
+Этапы (в соответствии с идеей «сначала MVP»):
+
+1. **MVP (гарантированно)**: `.ogg` mono — работает вообще без внешних кодеков.
+2. **Этап 2**: стерео/`.mp3`/`.wav` — через встроенные LGPL-кодеки
+   (`com.googlecode.soundlibs`: mp3spi, vorbisspi и их зависимости, кладутся в jar
+   через jar-in-jar и подключаются как JavaSound SPI).
+3. **Фолбэк**: если кодеки недоступны/не справились — внешний `ffmpeg`
+   (`ffmpeg -ac 1 -ar 44100 -c:a libvorbis`), путь настраивается в конфиге
+   (`ffmpegPath`, пусто = выключить).
+
+Перекодирование выполняется один раз и кешируется по SHA-256 исходника
+(при изменении файла — перекодируется, без изменения — переиспользуется).
+Недекодируемый файл — **предупреждение в лог и пропуск**, игра не падает.
+
+### Лимиты (конфиг `config/custommusic-common.toml`)
+
+| Параметр | По умолчанию | Смысл |
+|---|---|---|
+| `maxTracks` | 128 | максимум треков (= размер пула слотов) |
+| `maxFileSizeMb` | 50 | максимальный размер одного файла |
+| `maxDurationSeconds` | 600 | максимальная длительность трека |
+| `allowUnconvertibleStereo` | false | оставить стерео без 3D-затухания, если нельзя сконвертировать |
+| `ffmpegPath` | `ffmpeg` | путь к ffmpeg (пусто = отключить фолбэк) |
+| `chunksPerTick` | 8 | скорость синхронизации аудио (чанков ~28 КБ за тик) |
+
+---
+
+## Сборка
+
+Нужен любой JDK 21. Gradle-обёртка:
+
+```bash
+gradle wrapper   # один раз, если у вас нет локального Gradle ≥ 8.8 (создаст gradlew)
+./gradlew build  # Windows: gradlew.bat build
+```
+
+Готовый jar: **`build/libs/custommusic-1.0.0-all.jar`** (задача `jarJar` кладёт
+аудиокодеки внутрь jar — именно этот файл ставьте в `mods/`). Рядом собирается
+`custommusic-1.0.0.jar` без кодеков (работает только с mono `.ogg`).
+CI в комплекте (`.github/workflows/build.yml`) — GitHub Actions сам соберёт jar
+и приложит его к рану (Artifacts).
+
+> **Совет по JDK:** первая сборка запускает пайплайн NeoForm (декомпиляция и
+> патчинг Minecraft). Для воспроизводимого результата рекомендуется JDK 21.0.3
+> или 21.0.4 (эпоха 1.21.1) и ~4 ГБ свободной памяти — подробности в
+> [DEVNOTES.md](DEVNOTES.md).
+
+Быстрый запуск для разработки: `./gradlew runClient` / `./gradlew runServer`.
+
+Подробности о чувствительных к версиям API — в [DEVNOTES.md](DEVNOTES.md).
+
+## Структура проекта
+
+```
+custommusic-mod/
+├── build.gradle · settings.gradle · gradle.properties
+├── gradlew · gradlew.bat · gradle/wrapper/gradle-wrapper.properties
+├── .github/workflows/build.yml          # CI: автосборка .jar
+├── README.md · DEVNOTES.md · LICENSE
+├── example-music/                       # примеры треков (положи в music/)
+└── src/main/
+    ├── java/dev/custommusic/
+    │   ├── CustomMusicMod.java
+    │   ├── common/                      # общее: регистрация, конфиг, пакеты, команды
+    │   │   ├── CMItems.java             # предметы-пластинки
+    │   │   ├── CMSounds.java            # пул из 128 SoundEvent-слотов
+    │   │   ├── CMConfig.java            # конфиг (лимиты, ffmpeg)
+    │   │   ├── TrackEntry.java          # модель трека (slug, длительность, sha…)
+    │   │   ├── NameSanitizer.java       # безопасные id + транслит кириллицы
+    │   │   ├── VirtualPackResources.java# виртуальный pack в памяти
+    │   │   ├── payload/CMPayloads.java  # сетевые пакеты (трек-лист, чанки, bake)
+    │   │   └── commands/CustomDiscCommand.java
+    │   ├── server/                      # сервер: скан, конвертация, датапак
+    │   │   ├── TrackStore.java          # сканер папки + манифест + слоты
+    │   │   ├── AudioConverter.java      # декод → mono 44.1 kHz → Ogg (+OggInfo, ffmpeg)
+    │   │   ├── TransferQueue.java       # передача аудио клиенту (paced)
+    │   │   ├── ServerPackInserter.java  # виртуальный датапак (jukebox_song + тег)
+    │   │   ├── ServerPayloadHandlers.java
+    │   │   ├── ServerEvents.java        # login/commands/creative tab
+    │   │   └── BlankDiscItem.java       # чистая пластинка (ПКМ → выбор трека)
+    │   ├── client/                      # клиент: кеш, ресурспак, GUI
+    │   │   ├── ClientTrackCache.java    # кеш скачанных треков + sounds.json
+    │   │   ├── ClientPackInserter.java  # виртуальный ресурспак
+    │   │   ├── ClientPayloadHandler.java
+    │   │   ├── ChooseTrackScreen.java   # экран выбора трека
+    │   │   └── ClientReloadUtil.java
+    │   └── mixins/client/SoundEngineMixin.java  # диагностический лог
+    └── resources/
+        ├── META-INF/neoforge.mods.toml · custommusic.mixins.json · pack.mcmeta
+        ├── assets/custommusic/ (lang en/ru, модели, текстуры)
+        └── data/custommusic/recipe/blank_disc.json
+```
+
+## Ограничения и FAQ
+
+- **Почему трек конвертируется в моно?** Стерео-источники в OpenAL не имеют
+  3D-затухания — трек звучал бы «на всю карту». Моно даёт честное позиционное
+  затухание, как у ванильных пластинок. Если стерео критично, а кодеков нет —
+  см. `allowUnconvertibleStereo`.
+- **Выделенный сервер:** клиенту с модом треки скачиваются автоматически при
+  входе (~секунды на альбом). Пока синхронизация не закончилась, пластинка
+  вставится, но будет молчать — всё доиграется после F3+T/автоперезагрузки.
+- **Больше 128 треков?** Лишние пропускаются с предупреждением (пул слотов
+  фиксирован на этапе регистрации реестра — это цена решения без миксинов).
+- **Удалил трек из папки?** После `/customdisc reload` запись исчезнет из
+  реестра; старые пластинки просто перестанут играть (без крашей).
+- **F3+T во время песни** перезапускает звуковой движок — звук прекратится,
+  но «проигрывание» пластинки продолжится ванильно до конца таймера.
+- **Мод на клиенте обязателен?** Да: сервер раздаёт данные, а играет их
+  клиентский звуковой движок через виртуальный ресурспак.
+
+## Лицензии зависимостей
+
+Код мода — MIT. Внутрь jar кладутся аудиокодеки LGPL (`jlayer`, `jorbis`,
+`tritonus-share`, `vorbisspi`, `mp3spi`) — они опциональны: без них работает
+`.ogg` mono, остальное — через ffmpeg или graceful skip.

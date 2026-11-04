@@ -1,0 +1,11 @@
+{
+  "item.custommusic.music_disc": "Пластинка",
+  "item.custommusic.blank_disc": "Чистая пластинка",
+  "pack.custommusic.data": "Custom Music (данные)",
+  "pack.custommusic.sounds": "Custom Music (звуки)",
+  "message.custommusic.no_tracks": "Треки не найдены. Положите файлы .ogg/.mp3/.wav в config/custommusic/music/ и выполните /customdisc reload.",
+  "message.custommusic.baked": "На пластинку записан трек «%s».",
+  "screen.custommusic.choose_track": "Выбор трека",
+  "screen.custommusic.record": "Записать на пластинку",
+  "screen.custommusic.empty": "Треки ещё не синхронизированы…"
+}
