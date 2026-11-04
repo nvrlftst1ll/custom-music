@@ -38,11 +38,17 @@ jobs:
         with:
           gradle-version: "8.10"
 
-      # Idempotent safety net: (re)generates the wrapper under 8.10 in case
-      # gradlew / gradle/wrapper/* got lost during upload to GitHub.
-      # A no-op if the wrapper is already committed.
-      - name: Ensure Gradle wrapper
+      # Safety net: (re)generate the wrapper ONLY if it is not committed
+      # (e.g. lost when uploading to GitHub via the web UI). When gradlew
+      # IS committed — as in this repo — this step is skipped entirely,
+      # because even under the pinned 8.10 it needlessly re-evaluates the
+      # whole build (~40 s) on every run.
+      - name: Ensure Gradle wrapper (skipped when committed)
+        if: ${{ !hashFiles('gradlew') }}
         run: gradle wrapper --gradle-version 8.10
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Build
         run: ./gradlew build --no-daemon
@@ -51,5 +57,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: custommusic-mod
-          path: build/libs/custommusic-1.0.0-all.jar
+          path: build/libs/*.jar
           if-no-files-found: error

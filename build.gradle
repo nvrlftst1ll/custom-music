@@ -43,6 +43,30 @@ tasks.named('build') {
     dependsOn 'jarJar'
 }
 
+// Low-memory builds (opt-in via CM_LOWMEM=1): NeoForm's decompile step forks
+// Vineflower with -Xmx4g by default, which the OOM-killer slays on a 4 GiB
+// machine (the fork dies with SIGKILL / exit 137). The official way to right-
+// size it is the `subsystems` DSL — jvmArguments on the task cannot override
+// it (NeoFormRuntimeExtension strips -Xmx from the step's jvm args and re-adds
+// its own from these settings). CI runners and normal dev machines do NOT set
+// CM_LOWMEM and keep the stock 4g defaults.
+if (System.getenv('CM_LOWMEM') == '1') {
+    subsystems {
+        decompiler {
+            maxMemory = '1800m'
+        }
+        recompiler {
+            maxMemory = '1800m'
+        }
+    }
+    // Non-(-Xmx) JVM flags DO pass through (only -Xmx* is stripped and
+    // re-added from the subsystems settings). ParallelGC is the fastest
+    // collector for a batch decompile/recompile job.
+    tasks.withType(net.neoforged.gradle.dsl.common.tasks.Execute).configureEach {
+        jvmArguments.add('-XX:+UseParallelGC')
+    }
+}
+
 processResources {
     def replaceProperties = [
         minecraft_version   : minecraft_version,
