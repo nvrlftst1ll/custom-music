@@ -24,10 +24,24 @@ jobs:
           distribution: temurin
           java-version: "21.0.4"
 
-      - name: Set up Gradle
+      # THE FIX: NeoGradle 7.0.x (the build plugin of this project) is NOT
+      # compatible with Gradle 9+ — Gradle 9 removed the internal method
+      # org.gradle.util.internal.GUtil#toCamelCase, which NeoGradle calls at
+      # configuration time, so any step using bare `gradle` dies with:
+      #   'java.lang.String org.gradle.util.internal.GUtil.toCamelCase(...)'
+      # Without this input the action installs the LATEST Gradle (9.x now),
+      # which is exactly what broke the build. Stay on the 8.x line; 8.10 is
+      # the version pinned in gradle/wrapper/gradle-wrapper.properties.
+      # NB: quotes are mandatory — an unquoted 8.10 is parsed by YAML as 8.1!
+      - name: Set up Gradle 8.10
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10"
 
-      - name: Generate Gradle wrapper
+      # Idempotent safety net: (re)generates the wrapper under 8.10 in case
+      # gradlew / gradle/wrapper/* got lost during upload to GitHub.
+      # A no-op if the wrapper is already committed.
+      - name: Ensure Gradle wrapper
         run: gradle wrapper --gradle-version 8.10
 
       - name: Build

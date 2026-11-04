@@ -160,12 +160,19 @@ config/custommusic/music/*.ogg|mp3|wav
 
 ## Сборка
 
-Нужен любой JDK 21. Gradle-обёртка:
+Нужен любой JDK 21. Gradle-обёртка уже включена в проект:
 
 ```bash
-gradle wrapper   # один раз, если у вас нет локального Gradle ≥ 8.8 (создаст gradlew)
 ./gradlew build  # Windows: gradlew.bat build
 ```
+
+> ⚠️ **Только Gradle 8.x, не 9.x.** Плагин сборки NeoGradle 7.0.x несовместим с
+> Gradle 9: там удалён внутренний метод `GUtil#toCamelCase`, и любая команда
+> (включая `gradle wrapper`) падает на конфигурации с ошибкой
+> `'java.lang.String org.gradle.util.internal.GUtil.toCamelCase(...)'`.
+> Обёртка `gradlew` закреплена на **8.10** — всегда собирайте через неё.
+> Если обёртку нужно сгенерировать заново, делайте это Gradle 8.x:
+> `gradle wrapper --gradle-version 8.10` (не `gradle wrapper` без версии).
 
 Готовый jar: **`build/libs/custommusic-1.0.0-all.jar`** (задача `jarJar` кладёт
 аудиокодеки внутрь jar — именно этот файл ставьте в `mods/`). Рядом собирается
