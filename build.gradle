@@ -15,20 +15,24 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
     mavenCentral()
+    // The patched pure-Java Ogg Vorbis ENCODER (jVorbisEnc with a data fix, see
+    // repo/dev/custommusic/jvorbisenc-patched/) lives in this project-local repo.
+    maven { name = 'ProjectLocal'; url = uri('repo') }
 }
 
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
 
-    // Audio codecs (LGPL). They are loaded through the JavaSound SPI and are all OPTIONAL
-    // at runtime: if they are missing, mono .ogg tracks still work, everything else
-    // degrades gracefully (or falls back to an external ffmpeg binary). See README.
+    // Audio codecs — see repo/dev/custommusic/ for the patched/merged artifacts:
+    //  - audio-codecs: merged JavaSound SPI bundle (mp3spi/vorbisspi/jlayer/jorbis/
+    //    tritonus-share LGPL + JAAD public domain, decodes .ogg/.mp3/.m4a/.aac/.mp4).
+    //    Merged into ONE jar because vorbisspi and mp3spi both ship the javazoom.spi
+    //    package, which the module system rejects as a split package.
+    //  - jvorbisenc-patched: pure-Java Ogg Vorbis ENCODER (port of libvorbis) with a
+    //    data fix — nothing else encodes .ogg in pure Java.
     [
-        'com.googlecode.soundlibs:jlayer:1.0.1.4',
-        'com.googlecode.soundlibs:jorbis:0.0.17.4',
-        'com.googlecode.soundlibs:tritonus-share:0.3.7.4',
-        'com.googlecode.soundlibs:vorbisspi:1.0.3.3',
-        'com.googlecode.soundlibs:mp3spi:1.9.5.4',
+        'dev.custommusic:audio-codecs:1.0',
+        'dev.custommusic:jvorbisenc-patched:0.0.3',
     ].each { coord ->
         def (group, name, ver) = coord.split(':').toList()
         jarJar(group: group, name: name, version: "[${ver},)") {

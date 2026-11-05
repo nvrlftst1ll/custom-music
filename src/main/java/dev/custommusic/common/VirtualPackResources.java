@@ -94,7 +94,9 @@ public final class VirtualPackResources implements PackResources {
     @SuppressWarnings("unchecked")
     public <T> T getMetadataSection(MetadataSectionSerializer<T> serializer) {
         if ("pack".equals(serializer.getMetadataSectionName())) {
-            return (T) new PackMetadataSection(description, packFormat);
+            // The vanilla 3-arg constructor works in dev and production jars alike
+            // (the 2-arg convenience ctor only exists in the dev/patched classpath).
+            return (T) new PackMetadataSection(description, packFormat, Optional.empty());
         }
         return null;
     }

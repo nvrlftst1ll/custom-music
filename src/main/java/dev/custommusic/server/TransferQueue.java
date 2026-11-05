@@ -39,7 +39,10 @@ public final class TransferQueue {
     }
 
     public static void sendTrackList(ServerPlayer player) {
-        TrackStore.get().ensureScanned();
+        // No ensureScanned() here on purpose: the scan always runs during datapack
+        // registration (AddPackFindersEvent) before players can log in, and entries()
+        // reads an atomic snapshot — a login during a background /customdisc reload
+        // must never block the server thread waiting for the scan monitor.
         List<TrackEntry> entries = new ArrayList<>(TrackStore.get().entries());
         PacketDistributor.sendToPlayer(player, new TrackListPayload(entries));
     }

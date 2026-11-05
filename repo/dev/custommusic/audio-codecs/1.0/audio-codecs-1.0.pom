@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>dev.custommusic</groupId>
+  <artifactId>audio-codecs</artifactId>
+  <version>1.0</version>
+  <packaging>jar</packaging>
+  <name>Custom Music audio codecs (merged)</name>
+  <description>Merged, deduplicated bundle of the audio codecs used by Custom Music:
+    com.googlecode.soundlibs jlayer/jorbis/tritonus-share/vorbisspi/mp3spi (LGPL, JavaSound
+    SPI for MP3 and Ogg Vorbis) + net.sourceforge.jaadec:jaad (public domain, AAC decoder
+    for .m4a/.aac/.mp4). Merged into ONE jar because the original vorbisspi and mp3spi jars
+    both contain the javazoom.spi package, which the Java Platform Module System rejects as
+    a split package when both are jar-in-jar'd as separate modules. The single duplicated
+    class (javazoom.spi.PropertiesContainer) is byte-identical and included once.</description>
+</project>
