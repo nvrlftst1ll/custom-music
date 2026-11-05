@@ -142,7 +142,13 @@ public final class ClientTrackCache {
         for (TrackEntry t : available()) {
             if (!first) json.append(',');
             first = false;
-            json.append("\n  \"").append(CustomMusicMod.MODID).append(':').append(CMSounds.slotName(t.slot()))
+            // NB: keys in sounds.json must be PLAIN names ("slot_7"), never
+            // "custommusic:slot_7": vanilla reads each pack's sounds.json and builds
+            // the event id as fromNamespaceAndPath(<pack namespace>, key) — a
+            // namespaced key would register "custommusic:custommusic:slot_7" (or
+            // fail validation), and the SoundEvent would never resolve. The
+            // namespace comes from the pack itself (assets/custommusic/...).
+            json.append("\n  \"").append(CMSounds.slotName(t.slot()))
                 .append("\": {\"sounds\": [{\"name\": \"")
                 .append(CustomMusicMod.MODID).append(":tracks/").append(t.slug())
                 .append("\", \"stream\": true}]}");

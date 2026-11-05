@@ -90,6 +90,49 @@ Could not find any matches for dev.custommusic:audio-codecs:[1.0,)».
 versions[], lastUpdated}. При добавлении новой версии артефакта добавьте
 `<version>` и обновите `latest`/`release`.
 
+## Проверенная механика vanilla 1.21.1 (по байткоду client.jar + официальные маппинги)
+
+- **Чтение sounds.json (SoundManager.prepare):** для КАЖДОГО namespace из
+  `ResourceManager.getNamespaces()` берётся список
+  `getResourceStacks(ResourceLocation.fromNamespaceAndPath(ns, "sounds.json"))`
+  — это доходит до `PackResources.getResource(PackType, id)` по всем пакам по
+  очереди. Для виртуального пака достаточно корректно отвечать в `getResource`
+  и в `getNamespaces`; `listResources` для sounds.json НЕ используется.
+- **Ключи sounds.json:** id события = `ResourceLocation.fromNamespaceAndPath(
+  <namespace пака>, <ключ из JSON>)`. Ключи обязаны быть БЕЗ префикса
+  (`slot_7`), иначе получится `custommusic:custommusic:slot_7` и событие не
+  найдётся. (Ошибка 1.0.1: ключи писались как `custommusic:slot_7`.)
+- **Поле "name" у звука:** `FileToIdConverter("sounds", ".ogg")` строит путь
+  файла `sounds/<path>.ogg` в namespace'е; `custommusic:tracks/<slug>` →
+  `assets/custommusic/sounds/tracks/<slug>.ogg` — префикс namespace в "name"
+  разрешён и нужен.
+- **`Minecraft.reloadResourcePacks()`** существует (публичный, возвращает
+  CompletableFuture) — рефлексия в ClientReloadUtil находит его; F3+T — тот же путь.
+- **Кодировщик jVorbisEnc:** вывод проверен побайтово (структура Ogg, CRC, BOS/
+  EOS, гранулы) и декодером stb_vorbis (тот же, что в Minecraft через LWJGL) —
+  полностью валиден. Эмпирический тест: синус 5 с → 220500 сэмплов. vorbisspi
+  (jorbis) на этом же файле декодирует 0 фреймов — это причуда vorbisspi
+  (важно только для ре-декодирования стерео-OGG-источников, не для воспроизведения).
+
+## Сборка без полного пайплайна (если окно сборки ограничено)
+
+Шаг VineFlower-декомпиляции не всегда укладывается в лимит времени. Компромисс —
+скомпилировать мод javac'ом против артефактов, которые пайплайн уже создал
+(шаг rename завершается быстро):
+
+1. Прогнать `./gradlew build` пока не завершатся шаги до `neoFormRename`;
+   отображённый `build/neoForm/.../steps/rename/output.jar` — это маппнутый,
+   стрипнутый, merged-классфайл Minecraft 1.21.1 (нужен как classpath).
+2. Скачать `neoforge-21.1.77-universal.jar`, `fancymodloader:loader:4.0.31`,
+   `net.neoforged:bus:8.0.2`, **`net.neoforged:mergetool:2.0.3:api`** (там живёт
+   `net.neoforged.api.distmarker.Dist`!), `net.fabricmc:sponge-mixin`,
+   `com.google.code.findbugs:jsr305:3.0.2` (для javax.annotation.Nullable),
+   и взять 97 библиотек из `steps/listLibraries/libraries.txt`.
+3. `javac --release 21 -proc:none -cp <все jar'ы + repo-кодеки> -d out src/...`
+   (47 класса). Собрать jar: классы + ресурсы + `META-INF/jarjar/*` из
+   предыдущей сборки + версия в `neoforge.mods.toml`. CI (GitHub Actions)
+   всё равно пересобирает каноничным путём.
+
 ## Известные упрощения
 
 - Конвертация читает PCM в память (до ~256 МБ guard). Для стриминговой

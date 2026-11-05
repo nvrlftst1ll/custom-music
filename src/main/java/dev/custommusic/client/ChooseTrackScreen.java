@@ -74,7 +74,11 @@ public class ChooseTrackScreen extends Screen {
 
     private class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> {
         TrackListWidget(Minecraft mc, int width, int height, List<TrackEntry> tracks) {
-            super(mc, width, height, 48, 18);
+            // itemHeight=20: two 9-px font lines (drawn at top+1 and top+10) then
+            // have a 1-px margin top and bottom inside the row, instead of
+            // overflowing the selection box by 1 px (which pushed the text down
+            // against the row's bottom border at high GUI scales).
+            super(mc, width, height, 48, 20);
             // y0=48, list height so that the bottom edge is height-64
             updateSizeAndPosition(width, height - 64 - 48, 48);
             for (TrackEntry track : tracks) {
