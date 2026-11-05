@@ -70,6 +70,26 @@
 - **Синхронизация скорости `chunksPerTick`** через `MinecraftServer#execute`
   (никаких `TickEvent` — их пакеты/сигнатуры менялись в 21.x).
 
+## Локальный maven-repo `repo/` и динамические версии (важно для CI)
+
+`build.gradle` резолвит `dev.custommusic:audio-codecs:[1.0,)` и
+`dev.custommusic:jvorbisenc-patched:[0.0.3,)` из project-local репозитория
+`repo/`. Диапазон версий требует ПЕРЕЧИСЛИТЬ доступные версии, и Gradle
+(проверено на 8.10, строка CI) **не листает директории maven-репозитория** —
+нужен `repo/dev/custommusic/<artifactId>/maven-metadata.xml`. Без него даже
+при полностью закоммиченных jar/pom сборка падает на построении графа задач
+`build` с «Could not determine the dependencies of task ':jarJar' →
+Could not find any matches for dev.custommusic:audio-codecs:[1.0,)».
+Эмпирический чек (Gradle 8.10, локальный file-maven-repo): диапазон без
+метаданных — FAIL, с метаданными — `[1.0,) -> 1.0` OK, статическая версия — OK.
+
+Метаданные пишутся руками (артефакты пересобираются редко, maven-publish тут
+не подключён). CI перед сборкой проверяет наличие всех шести файлов repo/
+(2 jar + 2 pom + 2 metadata) и печатает внятную ошибку вместо загадочной.
+Состав `maven-metadata.xml`: groupId/artifactId/versioning{latest, release,
+versions[], lastUpdated}. При добавлении новой версии артефакта добавьте
+`<version>` и обновите `latest`/`release`.
+
 ## Известные упрощения
 
 - Конвертация читает PCM в память (до ~256 МБ guard). Для стриминговой

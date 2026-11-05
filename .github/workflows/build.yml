@@ -50,6 +50,35 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # The audio codecs (audio-codecs, jvorbisenc-patched) are PREBUILT jars
+      # that live in the project-local maven repository repo/. build.gradle
+      # resolves them by VERSION RANGE ([1.0,) / [0.0.3,)), and Gradle can NOT
+      # enumerate versions of a maven repo by listing directories — it needs
+      # repo/dev/custommusic/<artifact>/maven-metadata.xml. Missing repo/ files
+      # or missing metadata make the build die with the cryptic:
+      #   Could not find any matches for dev.custommusic:audio-codecs:[1.0,)
+      # This step fails fast with an actionable message instead.
+      - name: Verify bundled codec libraries (repo/)
+        run: |
+          set -e
+          for f in \
+            repo/dev/custommusic/audio-codecs/maven-metadata.xml \
+            repo/dev/custommusic/audio-codecs/1.0/audio-codecs-1.0.jar \
+            repo/dev/custommusic/audio-codecs/1.0/audio-codecs-1.0.pom \
+            repo/dev/custommusic/jvorbisenc-patched/maven-metadata.xml \
+            repo/dev/custommusic/jvorbisenc-patched/0.0.3/jvorbisenc-patched-0.0.3.jar \
+            repo/dev/custommusic/jvorbisenc-patched/0.0.3/jvorbisenc-patched-0.0.3.pom
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing bundled library file: $f"
+              echo "::error::The repo/ directory ships the prebuilt audio codec jars and must be committed to git (all of it: jars, poms AND maven-metadata.xml)."
+              echo "::error::Fix from the project root:"
+              echo "::error::  git add -A repo/ && git commit -m 'ci: add bundled codec repository' && git push"
+              echo "::error::(If the jars were previously ignored: git add -f repo/)"
+              exit 1
+            fi
+          done
+
       - name: Build
         run: ./gradlew build --no-daemon
 

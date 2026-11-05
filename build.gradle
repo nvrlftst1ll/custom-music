@@ -99,6 +99,9 @@ runs {
 
     server {
         server()
-        programArgument '--nogui'
+        // NeoGradle 7.0.x: `programArgument` is deprecated (it calls the removed
+        // in-future Run.getProgramArguments()); the replacement DSL is
+        // `arguments` — see the runs section of the NeoGradle 7 README.
+        arguments '--nogui'
     }
 }
