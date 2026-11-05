@@ -1,5 +1,6 @@
 package dev.custommusic;
 
+import dev.custommusic.common.CMBlocks;
 import dev.custommusic.common.CMConfig;
 import dev.custommusic.common.CMItems;
 import dev.custommusic.common.CMSounds;
@@ -9,15 +10,16 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 
 /**
- * Custom Music — play your own tracks as vanilla jukebox discs.
+ * Custom Music — play your own tracks as vanilla jukebox discs or via the Juke Box block.
  *
  * Design in one paragraph: the server scans {@code config/custommusic/music/}, converts every
  * file to mono 44.1 kHz Ogg Vorbis and maps each track to one of {@link CMSounds#SLOT_COUNT}
  * pre-registered {@code SoundEvent} slots. A virtual (in-memory) SERVER_DATA pack injects
  * {@code data/custommusic/jukebox_song/<id>.json} entries plus the {@code minecraft:music_discs}
  * item tag, a virtual CLIENT_RESOURCES pack generates {@code sounds.json} for the slots and
- * serves the synced audio files. Playback therefore runs 100% through vanilla
- * {@code SoundSource.RECORDS} positioning — no sound engine surgery needed.
+ * serves the synced audio files. Disc playback runs 100% through vanilla
+ * {@code SoundSource.RECORDS} positioning; the Juke Box block plays the same slot sounds
+ * client-side with loop/volume/hearing-range baked into the sound instance.
  */
 @Mod(CustomMusicMod.MODID)
 public final class CustomMusicMod {
@@ -27,6 +29,8 @@ public final class CustomMusicMod {
         CMConfig.register(container);
         CMItems.ITEMS.register(modBus);
         CMSounds.SOUNDS.register(modBus);
+        CMBlocks.BLOCKS.register(modBus);
+        CMBlocks.BLOCK_ENTITIES.register(modBus);
     }
 
     public static ResourceLocation id(String path) {

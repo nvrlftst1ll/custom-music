@@ -34,6 +34,7 @@ public final class CreativeTabEvents {
     public static void onCreativeTabs(BuildCreativeModeTabContentsEvent event) {
         if (TOOLS_AND_UTILITIES_TAB.equals(event.getTabKey())) {
             event.accept(CMItems.BLANK_DISC.get());
+            event.accept(CMItems.JUKEBOX.get());
         }
     }
 }

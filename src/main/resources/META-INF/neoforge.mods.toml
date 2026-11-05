@@ -10,7 +10,9 @@ authors = "Custom Music contributors"
 description = '''
 Play your own music in Minecraft: drop .ogg/.mp3/.wav/.m4a files into
 config/custommusic/music/, get data-driven jukebox disc items and listen to them
-in vanilla jukeboxes, positionally and server-authoritatively.
+in vanilla jukeboxes, positionally and server-authoritatively. Or place the
+Juke Box block: right-click it to pick a track, loop it, and set the volume
+and hearing range.
 '''
 
 [[mixins]]

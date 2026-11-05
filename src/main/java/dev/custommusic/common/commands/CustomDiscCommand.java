@@ -8,6 +8,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.logging.LogUtils;
 import dev.custommusic.common.TrackEntry;
+import dev.custommusic.server.CustomJukeboxBlockEntity;
 import dev.custommusic.server.TrackStore;
 import dev.custommusic.server.TransferQueue;
 import net.minecraft.ChatFormatting;
@@ -153,6 +154,10 @@ public final class CustomDiscCommand {
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 TransferQueue.sendTrackList(p);
             }
+            // Clients rebuild sounds.json on the next resource reload, which kills every Juke
+            // Box sound instance — drop the server's "who owns an instance" bookkeeping so the
+            // half-second listener sweep re-pushes fresh state to everyone in range.
+            CustomJukeboxBlockEntity.resyncAll();
         } else {
             // Nothing changed: skip the datapack reload entirely — no reason to freeze the game.
             source.sendSuccess(() -> Component.translatable("message.custommusic.no_changes")

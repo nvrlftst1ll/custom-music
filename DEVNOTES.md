@@ -28,6 +28,49 @@
 | 18 | `Minecraft` | `reloadResourcePacks()` — существует (ClientReloadUtil ищет его рефлексией по списку имён на случай минорных переименований) |
 | 19 | `Level` | `isClientSide` — публичное ПОЛЕ (не метод); `Level#playSound(Player, BlockPos, SoundEvent, SoundSource, float, float)` — есть |
 | 20 | `Item.use` у чистой пластинки | сервер шлёт пакет через `PacketDistributor.sendToPlayer`, возвращает `InteractionResultHolder.sidedSuccess(stack, level.isClientSide)` |
+| 21 | `SoundManager` (1.21.1) | `net.minecraft.client.sounds.SoundManager` (это то, что возвращает `Minecraft.getSoundManager()`; НЕ `resources.sounds`); `play(SoundInstance)`, `stop(SoundInstance)`, `isActive(SoundInstance)` |
+| 22 | `SimpleSoundInstance` | публичный ctor `SimpleSoundInstance(ResourceLocation, SoundSource, float volume, float pitch, RandomSource, boolean looping, int delay, Attenuation, double x, double y, double z, boolean relative)`; поля `AbstractSoundInstance` (volume, x, y, z, looping, attenuation, relative, delay) — protected |
+| 23 | `BlockEntity` (1.21.1) | НЕТ `onLoad()`/`onChunkUnloaded()` (появились позже); хуки: `setLevel(Level)` (вызывается и при загрузке чанка в LevelChunk) + NeoForge `ChunkEvent.Load/Unload` (game-bus) + `setRemoved()`; `loadAdditional(CompoundTag, HolderLookup.Provider)` — **protected** (не public) |
+| 24 | `BlockEntityType.Builder.of` | параметр `BlockEntityType$BlockEntitySupplier` — package-private; в канонической сборке его расширяет NeoForge accesstransformer, а для компиляции против сырого rename-jar нужен compile-only патч флагов (см. `patch_access.ts`) |
+| 25 | `BaseEntityBlock` | абстрактный `protected MapCodec<? extends BaseEntityBlock> codec()` — обязателен к override; `Block.simpleCodec(MyBlock::new)` подходит; `getRenderShape` по умолчанию INVISIBLE — вернуть `RenderShape.MODEL`, иначе блок невидим; `createTickerHelper(given, expected, ticker)` — static protected |
+| 26 | `BlockBehaviour` | `useWithoutItem(BlockState, Level, BlockPos, Player, BlockHitResult)` — protected, возвращает `InteractionResult`; `onRemove(oldState, Level, pos, newState, boolean)` — protected |
+| 27 | `ChunkEvent` | `net.neoforged.neoforge.event.level.ChunkEvent.Load/Unload` (game-bus); `getChunk(): ChunkAccess` — у `ChunkAccess` НЕТ `getBlockEntities()`, каст к `LevelChunk` (у него `public Map<BlockPos, BlockEntity> getBlockEntities()`); `getLevel(): LevelAccessor` |
+| 28 | `ClientTickEvent` | `net.neoforged.neoforge.client.event.ClientTickEvent.Post/Pre` (game-bus, классы-вложенцы без полей) |
+| 29 | `Math.clamp` | есть в JDK 21, но в коде мода используем `Mth.clamp(...)` — не зависит от версии JDK |
+| 30 | `MapColor` | `net.minecraft.world.level.material.MapColor`, константы `MapColor.COLOR_BROWN` и т.п. |
+
+## Механика звука 1.21.1, проверенная по декомпилированному SoundEngine (для Juke Box)
+
+- **Кого слышно и как далеко.** В `SoundEngine.play(instance)` НЕТ cull-дистанции
+  (легенда про «max(volume,1)×16» относится к старым версиям). Есть линейное
+  затухание: `f1 = Math.max(volume, 1.0F) * sound.getAttenuationDistance()` и
+  `Channel.linearAttenuation(f1)`: `AL_DISTANCE_MODEL = AL_LINEAR`,
+  `AL_ROLLOFF_FACTOR = f1`, `AL_REFERENCE_DISTANCE = 1.0`,
+  `AL_MAX_DISTANCE = 0.0`. Т.е. звук затухает до нуля ровно на `f1` блоках
+  (`attenuationDistance` берётся из поля `attenuation_distance` в sounds.json,
+  по умолчанию 16).
+- **Громкость клампится.** `SoundEngine.calculateVolume(volume, source)` =
+  `Mth.clamp(volume * categoryVolume, 0, 1)` — громкость > 1 НЕ делает звук
+  громче, только расширяет радиус затухания. Поэтому слайдер громкости
+  Juke Box — 10–100 %, а «громче ванильного» не бывает.
+- **Дальность отдельна от громкости.** Единственный способ задать радиус
+  независимо — `Sound.getAttenuationDistance()`. Мод оборачивает разрешённый
+  `Sound` в `RangedSound extends Sound`, у которого
+  `getAttenuationDistance() = range`. Обёртка корректна и для
+  EMPTY_SOUND-случая: `resolve()` возвращает null → экземпляр помечает
+  `resolved = false` и НЕ оборачивает, сохраняя ванильные предупреждения
+  «Unable to play unknown/empty soundEvent».
+- **Зацикливание стриминга работает.** `Channel.setLooping(looping && !streaming)`
+  (OpenAL-луп для буферов в памяти), а для стриминговых звуков
+  `SoundBufferLibrary.getStream(path, looping)` возвращает
+  `LoopingAudioStream` — бесшовный повтор OGG-потока. Ручной пере-старт
+  нужен только при `delay > 0` (мы не используем).
+- **Много одновременно играющих Juke Box** держат по одному OpenAL
+  streaming-каналу каждый — пул каналов ограничен (у OpenAL Soft ~255 суммарно,
+  стриминговых меньше); на практике десяток ящиков безопасен.
+- **`ServerLevel.players()`** возвращает `List<ServerPlayer>` — итерация по
+  нему даёт только игроков этого измерения (проверки «другого измерения»
+  не нужны); `Level.random` — публичное поле `RandomSource`.
 
 ## Про сборку в стеснённых условиях и воспроизводимость
 
@@ -118,20 +161,34 @@ versions[], lastUpdated}. При добавлении новой версии а
 
 Шаг VineFlower-декомпиляции не всегда укладывается в лимит времени. Компромисс —
 скомпилировать мод javac'ом против артефактов, которые пайплайн уже создал
-(шаг rename завершается быстро):
+(шаг rename завершается быстро). Всё автоматизировано тремя скриптами:
 
-1. Прогнать `./gradlew build` пока не завершатся шаги до `neoFormRename`;
-   отображённый `build/neoForm/.../steps/rename/output.jar` — это маппнутый,
-   стрипнутый, merged-классфайл Minecraft 1.21.1 (нужен как classpath).
-2. Скачать `neoforge-21.1.77-universal.jar`, `fancymodloader:loader:4.0.31`,
+0. Предусловия: `./gradlew build` хотя бы раз дойти до `:neoFormRename` (даёт
+   `build/neoForm/<id>/steps/rename/output.jar` — маппнутый, стрипнутый,
+   merged Minecraft 1.21.1 — главный classpath) и gradle-toolchain JDK
+   (`~/.gradle/jdks/eclipse_adoptium-21…/bin/javac`). Так же нужны в classpath:
+   `neoforge-21.1.77-universal.jar`, `fancymodloader:loader:4.0.31`,
    `net.neoforged:bus:8.0.2`, **`net.neoforged:mergetool:2.0.3:api`** (там живёт
-   `net.neoforged.api.distmarker.Dist`!), `net.fabricmc:sponge-mixin`,
+   `net.neoforged.api.distmarker.Dist`!), `net.fabricmc:sponge-mixin:0.15.2+mixin.0.8.7`,
    `com.google.code.findbugs:jsr305:3.0.2` (для javax.annotation.Nullable),
-   и взять 97 библиотек из `steps/listLibraries/libraries.txt`.
-3. `javac --release 21 -proc:none -cp <все jar'ы + repo-кодеки> -d out src/...`
-   (47 класса). Собрать jar: классы + ресурсы + `META-INF/jarjar/*` из
-   предыдущей сборки + версия в `neoforge.mods.toml`. CI (GitHub Actions)
-   всё равно пересобирает каноничным путём.
+   97 библиотек из `steps/listLibraries/libraries.txt` и кодеки из `repo/`.
+1. **`bun run patch_access.ts`** — патчит `BlockEntityType$BlockEntitySupplier`
+   в compile-only копии jar'а (public + InnerClasses-флаги; ровно то, что в
+   канонической сборке делает NeoForge accesstransformer). Без этого javac
+   отвергает `BlockEntityType.Builder.of(MyBE::new, …)` — интерфейс
+   package-private. Исправлен нюанс парсера: CONSTANT_Dynamic (тег 17)
+   занимает 4 байта, как InvokeDynamic, а не 2.
+2. **`bash compile_sandbox.sh`** — javac всех исходников (107 записей classpath).
+3. **`bash package_sandbox.sh`** — собирает дистрибутивный jar: классы + ресурсы +
+   раскрытые placeholder'ы в `neoforge.mods.toml` + `META-INF/jarjar/*`
+   (кодеки и metadata.json как в каноническом jarJar-выходе). Результат кладётся
+   в `build/libs/custommusic-<version>-all.jar`. Проверено: у собранного так
+   1.0.2-jar байт `[[mods]]` в toml валиден (hexdump), классы корректны.
+
+Рефмапа для миксина не нужно: с 1.20.2 NeoForge исполняет Minecraft в mojmap-
+именах в рантайме, поэтому `@Mixin`-цель `play(Lnet/minecraft/client/resources/
+sounds/SoundInstance;)V` работает и в проде (подтверждено 1.0.2).
+CI (GitHub Actions) всё равно пересобирает каноничным путём.
 
 ## Известные упрощения
 
@@ -144,3 +201,18 @@ versions[], lastUpdated}. При добавлении новой версии а
   проверяется постфактум (файл декодируется, потом отбрасывается, если длиннее).
 - Один миксин (`SoundEngineMixin`) — чисто диагностический: подсказка в лог,
   если слот ещё не скачан клиентом.
+
+### Упрощения Juke Box (1.1.0)
+
+- Игрок, вошедший в радиус СЕРЕДИНЫ трека, слышит его с начала (ванильный
+  звуковой движок не умеет seek). Кто был в радиусе с самого старта — слышат
+  без прерываний.
+- Смена трека/громкости/дальности/зацикливания во время игры перезапускает
+  экземпляр у всех слушателей с начала трека (нет live-обновления gain; seek
+  невозможен). Слайдеры деблоунсятся (отправка ≤ 2 раза/с, форс при отпускании).
+- Если сервер держит дистанцию стрима меньше радиуса (simulation distance <
+  range/32+), чанк с Juke Box может выгрузиться при игроках в радиусе — на этот
+  случай `suspendForUnload()` честно рассылает стоп и состояние NBT сохраняется.
+- Один Juke Box = один OpenAL streaming-канал на клиента; десятки одновременно
+  играющих боксов могут упереться в лимит каналов (звук молча не стартует,
+  в IDE-логе будет «Failed to create new sound handle»).

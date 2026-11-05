@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "PPP",
+    "PDP",
+    "PPP"
+  ],
+  "key": {
+    "P": { "item": "minecraft:oak_planks" },
+    "D": { "item": "minecraft:note_block" }
+  },
+  "result": {
+    "id": "custommusic:jukebox",
+    "count": 1
+  }
+}

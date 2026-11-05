@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "custommusic:block/jukebox" }
+  }
+}

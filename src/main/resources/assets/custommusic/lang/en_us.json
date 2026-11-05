@@ -1,6 +1,7 @@
 {
   "item.custommusic.music_disc": "Music Disc",
   "item.custommusic.blank_disc": "Blank Music Disc",
+  "block.custommusic.jukebox": "Juke Box",
   "pack.custommusic.data": "Custom Music (data)",
   "pack.custommusic.sounds": "Custom Music (sounds)",
   "message.custommusic.no_tracks": "No tracks found. Put .ogg/.mp3/.wav/.m4a files into config/custommusic/music/ and run /customdisc reload.",
@@ -15,5 +16,14 @@
   "message.custommusic.baked": "Track \"%s\" is now on the disc.",
   "screen.custommusic.choose_track": "Choose a track",
   "screen.custommusic.record": "Record onto the disc",
-  "screen.custommusic.empty": "No synced tracks yet…"
+  "screen.custommusic.empty": "No synced tracks yet…",
+  "screen.custommusic.jukebox": "Juke Box",
+  "screen.custommusic.jukebox_hint": "Double-click a track to play it",
+  "screen.custommusic.jukebox_stopped": "Nothing is playing",
+  "screen.custommusic.jukebox_stop": "Stop",
+  "screen.custommusic.jukebox_loop": "Loop: %s",
+  "screen.custommusic.jukebox_volume": "Volume: %s%%",
+  "screen.custommusic.jukebox_range": "Range: %s blocks",
+  "screen.custommusic.on": "ON",
+  "screen.custommusic.off": "OFF"
 }

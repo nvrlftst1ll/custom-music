@@ -1,6 +1,7 @@
 {
   "item.custommusic.music_disc": "Пластинка",
   "item.custommusic.blank_disc": "Чистая пластинка",
+  "block.custommusic.jukebox": "Juke Box",
   "pack.custommusic.data": "Custom Music (данные)",
   "pack.custommusic.sounds": "Custom Music (звуки)",
   "message.custommusic.no_tracks": "Треки не найдены. Положите файлы .ogg/.mp3/.wav/.m4a в config/custommusic/music/ и выполните /customdisc reload.",
@@ -15,5 +16,14 @@
   "message.custommusic.baked": "На пластинку записан трек «%s».",
   "screen.custommusic.choose_track": "Выбор трека",
   "screen.custommusic.record": "Записать на пластинку",
-  "screen.custommusic.empty": "Треки ещё не синхронизированы…"
+  "screen.custommusic.empty": "Треки ещё не синхронизированы…",
+  "screen.custommusic.jukebox": "Juke Box",
+  "screen.custommusic.jukebox_hint": "Двойной клик по треку — воспроизвести",
+  "screen.custommusic.jukebox_stopped": "Ничего не играет",
+  "screen.custommusic.jukebox_stop": "Стоп",
+  "screen.custommusic.jukebox_loop": "Зациклить: %s",
+  "screen.custommusic.jukebox_volume": "Громкость: %s%%",
+  "screen.custommusic.jukebox_range": "Дальность: %s блоков",
+  "screen.custommusic.on": "ВКЛ",
+  "screen.custommusic.off": "ВЫКЛ"
 }

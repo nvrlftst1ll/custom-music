@@ -160,11 +160,15 @@ public final class CMPayloads {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("1");
+        // "2": 1.1.0 adds the Juke Box payloads (state/open/action); keep in sync across versions.
+        PayloadRegistrar registrar = event.registrar("2");
         registrar.playToServer(RequestTracksPayload.TYPE, RequestTracksPayload.STREAM_CODEC,
             dev.custommusic.server.ServerPayloadHandlers::handleRequest);
         registrar.playToServer(BakeTrackPayload.TYPE, BakeTrackPayload.STREAM_CODEC,
             dev.custommusic.server.ServerPayloadHandlers::handleBake);
+        registrar.playToServer(JukeboxPayloads.JukeboxActionPayload.TYPE,
+            JukeboxPayloads.JukeboxActionPayload.STREAM_CODEC,
+            dev.custommusic.server.ServerPayloadHandlers::handleJukeboxAction);
         if (FMLEnvironment.dist == Dist.CLIENT) {
             dev.custommusic.client.ClientPayloadHandler.register(registrar);
         }

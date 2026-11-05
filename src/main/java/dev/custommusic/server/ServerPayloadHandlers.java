@@ -3,12 +3,17 @@ package dev.custommusic.server;
 import dev.custommusic.common.TrackEntry;
 import dev.custommusic.common.payload.CMPayloads.BakeTrackPayload;
 import dev.custommusic.common.payload.CMPayloads.RequestTracksPayload;
+import dev.custommusic.common.payload.JukeboxPayloads;
+import dev.custommusic.common.payload.JukeboxPayloads.JukeboxActionPayload;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
@@ -27,6 +32,37 @@ public final class ServerPayloadHandlers {
     public static void handleBake(BakeTrackPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)) return;
         context.enqueueWork(() -> bake(player, payload.slug()));
+    }
+
+    public static void handleJukeboxAction(JukeboxActionPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) return;
+        context.enqueueWork(() -> jukeboxAction(player, payload));
+    }
+
+    private static void jukeboxAction(ServerPlayer player, JukeboxActionPayload payload) {
+        // Never trust the client: the block must be a Juke Box and the player nearby.
+        BlockPos pos = payload.pos();
+        if (player.distanceToSqr(Vec3.atCenterOf(pos)) > JukeboxPayloads.INTERACTION_RANGE
+            * JukeboxPayloads.INTERACTION_RANGE) {
+            return;
+        }
+        BlockEntity blockEntity = player.level().getBlockEntity(pos);
+        if (!(blockEntity instanceof CustomJukeboxBlockEntity jukebox)) {
+            return;
+        }
+        switch (payload.action()) {
+            case JukeboxActionPayload.ACTION_PLAY -> {
+                TrackEntry entry = TrackStore.get().bySlug(payload.slug());
+                if (entry != null) {
+                    jukebox.play(entry.slug());
+                }
+            }
+            case JukeboxActionPayload.ACTION_STOP -> jukebox.stop();
+            case JukeboxActionPayload.ACTION_SETTINGS ->
+                jukebox.applySettings(payload.loop(), payload.volume(), payload.range());
+            default -> {
+            }
+        }
     }
 
     private static void bake(ServerPlayer player, String slug) {
