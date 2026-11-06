@@ -140,6 +140,10 @@ public final class TrackStore {
             }
         }
         LOGGER.info("[CustomMusic] Scanning music folder: {} ({} file(s))", folder.toAbsolutePath(), files.size());
+        // Missing jar-in-jar codecs are the #1 cause of "scan failed" reports: one
+        // NoClassDefFoundError used to escape the per-file guard below and kill the scan.
+        // This logs a single clear diagnostics block when that's the case.
+        Codecs.reportOnce();
 
         int maxTracks = Math.min(CMConfig.MAX_TRACKS.get(), CMSounds.SLOT_COUNT);
         Set<String> usedSlugs = new HashSet<>();
@@ -220,9 +224,13 @@ public final class TrackStore {
                 }
                 next.put(slug, new TrackEntry(slug, title, fileName, result.durationSeconds(),
                     size, shaSrc, result.sha256Ogg(), slot));
-            } catch (Exception e) {
-                // A broken file must never crash the server: warn + skip.
-                problems.add(fileName + " — " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+            } catch (Exception | LinkageError e) {
+                // A broken file must never crash the server: warn + skip. LinkageError is
+                // included on purpose: a missing codec class (jar-in-jar stripped or not
+                // loaded) throws NoClassDefFoundError, which must skip this file — not
+                // abort the entire scan with an opaque "scan failed" (the 1.1.0 bug).
+                problems.add(fileName + " — " + (e.getMessage() != null && !e.getMessage().isEmpty()
+                    ? e.getMessage() : e.toString()));
                 LOGGER.warn("[CustomMusic] Skipping '{}': {}", fileName, e.toString(), e);
                 skipped++;
             }

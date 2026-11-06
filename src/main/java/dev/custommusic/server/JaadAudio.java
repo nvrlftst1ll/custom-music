@@ -45,8 +45,27 @@ public final class JaadAudio {
         return "m4a".equals(ext) || "mp4".equals(ext) || "aac".equals(ext);
     }
 
+    /** @return true when the bundled JAAD classes are visible to this class's loader. */
+    public static boolean available() {
+        try {
+            Class.forName("net.sourceforge.jaad.mp4.MP4Container", false,
+                JaadAudio.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
+    }
+
     /** @throws IOException with a human-readable reason when the file cannot be decoded. */
     public static Pcm decode(Path file, String ext, int maxPcmBytes) throws IOException {
+        if (!available()) {
+            // Normally impossible (the codec is a jar-in-jar inside the mod jar), but when
+            // the nested library was stripped or failed to load, the class reference below
+            // would throw NoClassDefFoundError — an Error that escapes every per-file
+            // catch(Exception) guard and kills the whole scan. Probe first, fail soft.
+            throw new IOException("AAC decoder (JAAD) is not loaded — the bundled audio-codecs "
+                + "library is missing in this instance (re-download the full mod jar)");
+        }
         if ("aac".equals(ext)) {
             return decodeAdts(file, maxPcmBytes);
         }

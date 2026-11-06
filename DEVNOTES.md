@@ -216,3 +216,53 @@ CI (GitHub Actions) всё равно пересобирает каноничн�
 - Один Juke Box = один OpenAL streaming-канал на клиента; десятки одновременно
   играющих боксов могут упереться в лимит каналов (звук молча не стартует,
   в IDE-логе будет «Failed to create new sound handle»).
+
+## Ретро-тест 1.1.1 на живом сервере (эмпирика, не теория)
+
+Воспроизведение бага «reload → scan failed — NoClassDefFoundError:
+net/sourceforge/jaad/mp4/MP4Container» делалось на НАСТОЯЩЕМ выделенном
+NeoForge-сервере 21.1.77 (`neoforge-installer --installServer`, RCON для команд):
+
+- **Доставляемый jar 1.1.0 работоспособен на чистом сервере**: JiJ-библиотеки
+  грузятся (`Found library file "audio-codecs-1.0.jar" [parent: …]`),
+  `Night Owl.ogg` (mono 44.1k → passthrough) и `Test Song.m4a` (JAAD-декодер +
+  jVorbisEnc-энкодер) конвертируются за ~5 с, reload переиспользует кеш.
+  Значит мгновенный `NoClassDefFoundError` у пользователя — свойство ЕГО
+  окружения (старый/промежуточный jar в mods, конфликт с другим модом,
+  причуды лаунчера), а не кода мода.
+- **Механика бага подтверждена**: `JaadAudio.decodeMp4` ссылается на классы
+  JAAD напрямую → если модуль `audio-codecs` не загрузился, первый же `.m4a`
+  даёт `NoClassDefFoundError`. Это **`Error`, а не `Exception`** — он обходил
+  ВСЕ `catch (Exception)` (пофайловый guard в TrackStore, decoder/encoder
+  guards в AudioConverter) и убивал нить скана целиком; выживал только
+  `catch (Throwable)` в команде reload с фразой «scan failed». Один битый
+  m4a-файл = reload полностью бесполезен.
+- **Проверка фикса 1.1.1 (jar с вырезанным audio-codecs + ffmpegPath="" —
+  окружение пользователя без ffmpeg)**: скан завершается, m4a пропускается
+  пофайлово с понятной причиной («no JavaSound decoder … ffmpeg fallback is
+  disabled»), в latest.log — WARN-блок «Some bundled audio codecs are NOT
+  available» с перечнем, рабочий `.ogg` продолжает играть, в чате —
+  ✗-строка вместо «scan failed».
+- **Нюанс тест-стенда**: в песочнице есть ffmpeg — мод конвертирует m4a даже
+  без JAAD через Phase-3 fallback (это не баг, а фича; у пользователя ffmpeg
+  нет, поэтому для честного теста ffmpegPath="" обязателен).
+- **Тулчейн песочницы восстанавливается** (после очистки /tmp и ~/.gradle):
+  1. JDK: `curl -L api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse`
+     → распаковать → `ln -s` на `~/.gradle/jdks/eclipse_adoptium-21-amd64-linux.2`
+     (этот путь зашит в compile_sandbox.sh / package_sandbox.sh / patch_access.ts).
+  2. `JAVA_HOME=<jdk> CM_LOWMEM=1 ./gradlew --no-daemon neoFormRename neoFormListLibraries`
+     (~2 мин; даёт steps/rename/output.jar + steps/listLibraries/libraries.txt).
+  3. `bun run patch_access.ts` (патчит compile-only копию minecraft jar).
+  4. `/tmp/modcp/*.jar`: loader-4.0.31 и neoforge-21.1.77-universal есть на
+     maven.neoforged.net (universal — также в установленном сервере), bus-8.0.2 —
+     `net/neoforged/bus/8.0.2`, sponge-mixin — `net/fabricmc/sponge-mixin/0.15.2+mixin.0.8.7`,
+     mergetool-2.0.3-**api**-классификатор (там живёт `Dist`!), jsr305, кодеки из `repo/`.
+  5. `bash compile_sandbox.sh && bash package_sandbox.sh` (второй теперь
+     сам пишет metadata.json и БАЙТ-ПРОВЕРЯЕТ jar: заголовки `[[mods]]`/`[[mixins]]`,
+     JSON jarjar-метаданных, вложенные кодеки c MP4Container.class внутри,
+     классы Juke Box, текстуры, рецепты).
+- **Про `[ods]]`-фантом**: цепочка инструментов, через которую смотрятся файлы,
+  может показывать `[[mods]]` как `[ods]]` (артефакт отображения!). DEVNOTES
+  уже писал об этом; `od -c` показывает истину — файл содержит `[[mods]]`.
+  night-config 3.6.7 при этом парсит даже ИСКАЖЁННЫЙ `[ods]]` как валидный
+  `[[mods]]` (проверено напрямую) — ещё одна причина не доверять терминалу.

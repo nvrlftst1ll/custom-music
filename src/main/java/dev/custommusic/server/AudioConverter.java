@@ -157,11 +157,14 @@ public final class AudioConverter {
         }
 
         // Phase 2: decode -> downmix -> resample -> encode.
+        Codecs.reportOnce(); // loud, single diagnostics block if a bundled codec went missing
         List<String> failures = new ArrayList<>();
         MonoPcm mono = null;
         try {
             mono = decodeToMonoPcm(source);
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
+            // LinkageError: a missing codec class (jar-in-jar stripped/failed to load) must
+            // skip THIS file, not kill the whole scan (the reload-crash bug of 1.1.0).
             failures.add("no JavaSound decoder for it: " + e);
             LOGGER.warn("[CustomMusic] JavaSound cannot decode '{}': {} — trying ffmpeg",
                 source.getFileName(), e.toString());
@@ -175,7 +178,7 @@ public final class AudioConverter {
                 byte[] ogg = OggEncoder.encodeMono44100(mono.pcm());
                 Files.write(targetOgg, ogg);
                 encoded = Files.size(targetOgg) > 0;
-            } catch (Exception e) {
+            } catch (Exception | LinkageError e) {
                 failures.add("built-in Ogg encoder failed: " + e);
                 LOGGER.warn("[CustomMusic] Built-in Ogg encoder failed for '{}': {} — trying ffmpeg",
                     source.getFileName(), e.toString());
@@ -214,7 +217,7 @@ public final class AudioConverter {
                 byte[] mono = downmix(pcm.pcm(), pcm.channels());
                 byte[] resampled = resample(mono, pcm.sampleRate(), TARGET_RATE);
                 return new MonoPcm(resampled, resampled.length / (TARGET_RATE * PCM_BYTES));
-            } catch (Exception e) {
+            } catch (Exception | LinkageError e) {
                 LOGGER.warn("[CustomMusic] JAAD cannot decode '{}': {} — trying JavaSound/ffmpeg",
                     source.getFileName(), e.toString());
             }
